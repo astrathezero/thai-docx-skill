@@ -24,7 +24,7 @@ from docx.oxml.ns import nsdecls, qn
 DEFAULT_FONT = "TH Sarabun New"
 DEFAULT_LANG = "th-TH"
 DEFAULT_BODY_SIZE_PT = 16
-DEFAULT_LINE_SPACING = 1.15
+DEFAULT_LINE_SPACING = 1.1
 
 THAI_DIGITS = "๐๑๒๓๔๕๖๗๘๙"
 ARABIC_DIGITS = "0123456789"
@@ -80,7 +80,8 @@ def set_run_font(
     bold: bool = False,
     italic: bool = False,
     color_rgb: RGBColor = None,
-    lang_code: str = DEFAULT_LANG
+    lang_code: str = DEFAULT_LANG,
+    no_proof: bool = True
 ):
     """
     Applies complete Complex Script (CS) font and language properties to a Run.
@@ -95,14 +96,13 @@ def set_run_font(
 
     rPr = run._element.get_or_add_rPr()
 
-    # 1. Set rFonts across all font families + hint="cs"
+    # 1. Set rFonts across all font families
     rFonts = rPr.find(qn("w:rFonts"))
     if rFonts is None:
         rFonts = OxmlElement("w:rFonts")
         rPr.append(rFonts)
     for attr in ["ascii", "hAnsi", "cs", "eastAsia"]:
         rFonts.set(qn(f"w:{attr}"), name)
-    rFonts.set(qn("w:hint"), "cs")
 
     # 2. Set font sizes in half-points (both Western w:sz and Complex Script w:szCs)
     sz_val = str(int(size_pt * 2))
@@ -133,6 +133,11 @@ def set_run_font(
     lang.set(qn("w:val"), lang_code)
     lang.set(qn("w:eastAsia"), lang_code)
     lang.set(qn("w:bidi"), lang_code)
+
+    # 6. Suppress red squiggly spell/grammar check underlines
+    if no_proof:
+        if rPr.find(qn("w:noProof")) is None:
+            rPr.append(OxmlElement("w:noProof"))
 
 
 def set_paragraph_thai(
@@ -198,13 +203,16 @@ def set_paragraph_thai(
     if rFonts is None:
         rFonts = OxmlElement("w:rFonts")
         rPr.append(rFonts)
-    rFonts.set(qn("w:hint"), "cs")
+    rFonts.set(qn("w:cs"), font_name)
 
     szCs = rPr.find(qn("w:szCs"))
     if szCs is None:
         szCs = OxmlElement("w:szCs")
         rPr.append(szCs)
     szCs.set(qn("w:val"), "32")  # 16pt default
+
+    if rPr.find(qn("w:noProof")) is None:
+        rPr.append(OxmlElement("w:noProof"))
 
 
 # =============================================================================
@@ -369,9 +377,60 @@ def add_numbered_item(
 # 4. TABLE STYLING & FORMATTING
 # =============================================================================
 
+TBL_PR_ORDER = [
+    qn("w:tblStyle"),
+    qn("w:tblpPr"),
+    qn("w:tblOverlap"),
+    qn("w:bidiVisual"),
+    qn("w:tblStyleRowBandSize"),
+    qn("w:tblStyleColBandSize"),
+    qn("w:tblW"),
+    qn("w:jc"),
+    qn("w:tblCellSpacing"),
+    qn("w:tblInd"),
+    qn("w:tblBorders"),
+    qn("w:shd"),
+    qn("w:tblLayout"),
+    qn("w:tblCellMar"),
+    qn("w:tblLook"),
+    qn("w:tblCaption"),
+    qn("w:tblDescription"),
+]
+
+TC_PR_ORDER = [
+    qn("w:cnfStyle"),
+    qn("w:tcW"),
+    qn("w:gridSpan"),
+    qn("w:hMerge"),
+    qn("w:vMerge"),
+    qn("w:tcBorders"),
+    qn("w:shd"),
+    qn("w:noWrap"),
+    qn("w:tcMar"),
+    qn("w:textDirection"),
+    qn("w:tcFitText"),
+    qn("w:vAlign"),
+    qn("w:hideMark"),
+    qn("w:headers"),
+]
+
+
+def sort_element_children(parent, expected_order):
+    """Sorts XML children according to ECMA-376 schema definition."""
+    if parent is None:
+        return
+    order_map = {tag: i for i, tag in enumerate(expected_order)}
+    children = list(parent)
+    for c in children:
+        parent.remove(c)
+    children.sort(key=lambda elem: order_map.get(elem.tag, 9999))
+    for c in children:
+        parent.append(c)
+
+
 def set_cell_background(cell, hex_color: str):
-    """Set cell background shading."""
-    shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{hex_color}"/>')
+    """Set cell background shading with ECMA-376 compliant w:val='clear'."""
+    shd = parse_xml(f'<w:shd {nsdecls("w")} w:val="clear" w:color="auto" w:fill="{hex_color}"/>')
     cell._tc.get_or_add_tcPr().append(shd)
 
 
@@ -400,6 +459,7 @@ def style_table(
     """
     Style a table with professional headers, alternating row colors,
     clean horizontal borders, vertical centering, and Thai typography.
+    Enforces Single line spacing (1.0) and ECMA-376 schema order.
     """
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     tblPr = table._tbl.tblPr
@@ -426,7 +486,7 @@ def style_table(
 
         for j, cell in enumerate(row.cells):
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-            set_cell_margins(cell, top=110, bottom=110, left=130, right=130)
+            set_cell_margins(cell, top=100, bottom=100, left=130, right=130)
 
             if is_header:
                 set_cell_background(cell, header_bg)
@@ -439,11 +499,12 @@ def style_table(
             for p in cell.paragraphs:
                 p.paragraph_format.space_before = Pt(0)
                 p.paragraph_format.space_after = Pt(0)
-                p.paragraph_format.line_spacing = 1.15
+                p.paragraph_format.line_spacing = 1.0
                 set_paragraph_thai(
                     p,
                     alignment="center" if is_header else "thaiDistribute",
-                    space_after_pt=0
+                    space_after_pt=0,
+                    line_spacing=1.0
                 )
                 for r in p.runs:
                     if clean:
@@ -464,6 +525,45 @@ def style_table(
                             bold=False,
                             color_rgb=RGBColor(30, 30, 30)
                         )
+
+    # Reorder XML elements to adhere strictly to ECMA-376 schema
+    sort_element_children(tblPr, TBL_PR_ORDER)
+    for row in table.rows:
+        for cell in row.cells:
+            sort_element_children(cell._tc.get_or_add_tcPr(), TC_PR_ORDER)
+
+
+def suppress_proofing_in_docx(input_path: str, output_path: str = None) -> str:
+    """
+    Suppresses all spell/grammar check underlines (red squiggly lines) in Microsoft Word.
+    1. Removes all <w:proofErr> tags from word/document.xml
+    2. Adds <w:hideSpellingErrors/> and <w:hideGrammaticalErrors/> into word/settings.xml
+    """
+    import zipfile, re
+    if output_path is None:
+        output_path = input_path
+
+    temp_zip = input_path + ".tmp.zip"
+    with zipfile.ZipFile(input_path, "r") as zin:
+        with zipfile.ZipFile(temp_zip, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename == "word/document.xml":
+                    text = data.decode("utf-8")
+                    text = re.sub(r'<w:proofErr[^>]*/>', '', text)
+                    data = text.encode("utf-8")
+                elif item.filename == "word/settings.xml":
+                    text = data.decode("utf-8")
+                    if "<w:hideSpellingErrors" not in text:
+                        injection = '<w:hideSpellingErrors/><w:hideGrammaticalErrors/>'
+                        if "<w:proofState" in text:
+                            text = text.replace("<w:proofState", injection + "<w:proofState", 1)
+                        elif "</w:settings>" in text:
+                            text = text.replace("</w:settings>", injection + "</w:settings>", 1)
+                    data = text.encode("utf-8")
+                zout.writestr(item, data)
+    os.replace(temp_zip, output_path)
+    return output_path
 
 
 # =============================================================================
@@ -514,6 +614,7 @@ def apply_thai_distribute_to_document(
                         set_run_font(r, name=font_name, size_pt=r.font.size.pt if r.font.size else DEFAULT_BODY_SIZE_PT, bold=r.bold, italic=r.italic)
 
     doc.save(output_path)
+    suppress_proofing_in_docx(output_path)
     return output_path
 
 

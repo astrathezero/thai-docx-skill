@@ -1,8 +1,8 @@
 # Thai DOCX Skill for Anthropic Claude
 
-A specialized, production-ready skill for **Anthropic Claude** (Claude Code, Claude Desktop, and Claude Agent SDK) to create, format, edit, and repair professional Thai Word documents (`.docx`).
+A specialized, production-ready skill for **Anthropic Claude** (Claude Code, Claude Desktop, and Agent SDK) to create, format, edit, and repair professional Thai Word documents (`.docx`).
 
-This skill solves the OpenXML typography challenges in Microsoft Word (both macOS and Windows) that cause Thai text to either stretch individual characters across the line (`อ ุ ต ส า ห ก ร ร ม...`) or leave huge empty white gaps between words (`เว้นว่างไว้เยอะเกิน`).
+This skill bridges the gap between **Anthropic's official DOCX engineering** and **Thai OpenXML Typography standards** (solving the infamous letter-stretching and word-gap bugs on macOS and Windows).
 
 ---
 
@@ -10,17 +10,21 @@ This skill solves the OpenXML typography challenges in Microsoft Word (both macO
 
 1. **True Thai Justify (`thaiDistribute`)**:
    - Eliminates the **Word-Gap Explosion** (`เว้นว่างไว้เยอะเกิน`) caused by standard Western Justify (`both`).
-   - Eliminates the **Letter-Stretching Defect** (`อ ุ ต ส า ห ก ร ร ม...`) by properly configuring OpenXML Complex Script (CS) and Language definitions.
+   - Eliminates the **Letter-Stretching Defect** (`อ ุ ต ส า ห ก ร ร ม...`) by correctly injecting OpenXML Complex Script (CS) and Language definitions.
 2. **Thai Government & Standard Typography (มาตรฐานงานสารบรรณ)**:
    - Fonts: `TH Sarabun New` (16pt body, 16–18pt bold headings).
-   - Line spacing: 1.15–1.25 with proper vowel collision avoidance (`่`, `้`, `๊`, `๋`, `์`, `ุ`, `ู`).
+   - Line spacing: `1.1` for executive reports/summaries; `1.0` (Single) for government memos (ระเบียบงานสารบรรณ) and tables (eliminates loose character gaps while TH Sarabun New natively handles diacritics).
    - Paragraph indents: 0.4 inches (~1 cm).
    - Hanging indents for numbered lists: Left `0.45"`, First-line `-0.25"`.
    - Normalization: Thai ↔ Arabic numeral conversion and colon (`:`) removal from headings/lists.
 3. **Professional Table Styling**:
-   - Explicit column widths, custom borders, cell padding (`tcMar`), alternate row zebra striping, and `cantSplit`/`tblHeader`.
-4. **Document Repair**:
-   - Batch-repairs existing `.docx` files by applying Thai Distributed alignment and Complex Script tagging automatically.
+   - Explicit column widths, custom borders, cell padding (`tcMar`), alternate row zebra striping, Single line spacing (1.0), and `cantSplit`/`tblHeader`.
+4. **Zero Red Squiggly Underlines**:
+   - Completely eliminates spell/grammar check red squiggles across macOS and Windows Word using OpenXML `noProof` and `word/settings.xml` error hiding.
+5. **Full Anthropic DOCX Tooling**:
+   - XML surgery: Unzip, coalesce runs with `merge_runs.py`, edit `word/document.xml`, re-zip, and schema validate.
+   - Tracked changes acceptance (`accept_changes.py`).
+   - Multi-threaded comment injection (`comment.py`).
 
 ---
 
@@ -37,7 +41,10 @@ Or manually copy / symlink to your Claude skills directory:
 ```bash
 # Global installation for Claude Code
 mkdir -p ~/.claude/skills
-git clone https://github.com/astrathezero/thai-docx-skill.git ~/.claude/skills/thai-docx
+cp -R thai-docx ~/.claude/skills/
+
+# Or symlink
+ln -s "$(pwd)/thai-docx" ~/.claude/skills/thai-docx
 ```
 
 ### Option B: Install in a Specific Project Repository
@@ -45,7 +52,7 @@ git clone https://github.com/astrathezero/thai-docx-skill.git ~/.claude/skills/t
 For repository-scoped skills in Claude Code:
 ```bash
 mkdir -p .claude/skills
-git clone https://github.com/astrathezero/thai-docx-skill.git .claude/skills/thai-docx
+cp -R thai-docx .claude/skills/
 ```
 
 ---
@@ -67,6 +74,7 @@ You can also use the bundled Python module directly in scripts:
 
 ```python
 import sys, os
+# Add skill scripts to sys.path
 sys.path.append(os.path.expanduser("~/.claude/skills/thai-docx/scripts"))
 import thai_docx
 
@@ -93,11 +101,11 @@ thai_docx.add_numbered_item(
 )
 
 # 5. Add Professional Table
-table = doc.add_table(rows=2, cols=2)
+table = doc.add_table(rows=3, cols=2)
 table.cell(0, 0).text = "หัวข้อ"
 table.cell(0, 1).text = "รายละเอียด"
-table.cell(1, 0).text = "ข้อมูล 1"
-table.cell(1, 1).text = "รายละเอียด 1"
+table.cell(1, 0).text = "ด้านพลังงาน"
+table.cell(1, 1).text = "ความต้องการใช้ไฟฟ้าสูงขึ้นอย่างมีนัยสำคัญ"
 thai_docx.style_table(table, col_widths=[2.0, 4.5], header_bg="1B365D", alt_bg="F4F6F9")
 
 doc.save("รายงานสรุป.docx")
@@ -105,25 +113,24 @@ doc.save("รายงานสรุป.docx")
 
 ---
 
-## 🔧 Repair Existing Documents
+## 🛠️ CLI Utilities Included
 
-If you have a `.docx` document where the lines wrap awkwardly or character spacing is broken:
-
-```python
-import thai_docx
-
-# Automatically fixes justification, font CS tags, and spacing
-thai_docx.apply_thai_distribute_to_document("input_broken.docx", "output_fixed.docx")
-```
+| Tool | Command | Description |
+|---|---|---|
+| **Merge Runs** | `python scripts/merge_runs.py unpacked/` | Coalesces fragmented XML text runs so Thai words can be searched/replaced. |
+| **Comments** | `python scripts/comment.py unpacked/ "คอมเมนต์"` | Injects threaded comments into Word XML. |
+| **Accept Changes** | `python scripts/accept_changes.py in.docx out.docx` | Cleans document and accepts all tracked revisions. |
+| **Validate** | `python scripts/office/validate.py out.docx` | Validates against OpenXML ECMA-376 schemas. |
 
 ---
 
 ## 📋 Requirements
 
 - Python 3.9+ with `python-docx` (`pip install python-docx lxml`)
+- (Optional) LibreOffice (`soffice`) and `pdftoppm` for headless PDF export and visual verification.
 
 ---
 
 ## 📄 License
 
-MIT License - Copyright (c) 2026 astrathezero.
+MIT License. Feel free to use and distribute in any personal or enterprise workflow.

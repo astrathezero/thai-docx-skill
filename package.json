@@ -1,10 +1,10 @@
 {
-  "name": "thai-docx-skill",
-  "version": "1.0.0",
+  "name": "thai-docx",
+  "version": "1.1.0",
   "description": "Thai DOCX creation, typography, and editing skill for Anthropic Claude",
   "main": "scripts/thai_docx.py",
   "scripts": {
-    "test": "python3 -c 'import sys; sys.path.append(\"scripts\"); import thai_docx; print(\"thai-docx OK\")'",
+    "test": "/usr/bin/python3 -c 'import sys; sys.path.append(\"scripts\"); import thai_docx; print(\"thai-docx OK\")'",
     "install-global": "./install.sh"
   },
   "keywords": [
@@ -19,6 +19,6 @@
     "thaiDistribute",
     "sarabun"
   ],
-  "author": "astrathezero",
+  "author": "Antigravity & Attasit",
   "license": "MIT"
 }

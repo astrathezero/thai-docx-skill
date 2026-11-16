@@ -1,9 +1,9 @@
 ---
 name: thai-docx
-description: "Create, format, edit, repair, and manipulate professional Thai Word documents (.docx) following Thai government standards (ระเบียบงานสารบรรณ), Thai typography rules (TH Sarabun New 16pt, Complex Script OpenXML, thaiDistribute justification). Use whenever creating or modifying Thai documents, fixing Thai line breaks or spacing bugs (distribute letter-stretching vs huge justify gaps), formatting Thai tables, numbered/hanging lists, converting Thai PDF/reports to DOCX, or normalizing numerals and punctuation."
+description: "Create, format, edit, repair, and manipulate professional Thai Word documents (.docx) following Thai government standards (ระเบียบงานสารบรรณ), Thai typography rules (TH Sarabun New 16pt, Complex Script OpenXML, thaiDistribute justification), and Anthropic docx engineering best practices. Use whenever creating or modifying Thai documents, fixing Thai line breaks or spacing bugs (distribute letter-stretching vs huge justify gaps), formatting Thai tables, numbered/hanging lists, converting Thai PDF/reports to DOCX, or editing document.xml, merging runs, and managing tracked changes or comments."
 ---
 
-# Thai DOCX Creation, Typography Engineering, and Document Repair
+# Thai DOCX Creation, Editing, and Typography Engineering
 
 A `.docx` file is a ZIP archive containing XML parts. Thai typography in Microsoft Word requires specific OpenXML Complex Script (CS) and language declarations that differ from standard Western documents.
 
@@ -11,22 +11,27 @@ Choose your approach by task:
 
 | Task | Approach |
 |---|---|
-| **Create a new Thai document** | Use `scripts/thai_docx.py` via Python (`create_thai_document`, `add_body_paragraph`, `add_numbered_item`) |
-| **Fix broken spacing / letter stretching** | Use `thai_docx.apply_thai_distribute_to_document("in.docx", "out.docx")` |
-| **Inspect document alignments** | Use `thai_docx.inspect_document_alignments("in.docx")` |
-| **Table formatting & styling** | Use `thai_docx.style_table(table, col_widths=...)` |
-| **Numerals / punctuation normalization** | Use `thai_to_arabic()`, `arabic_to_thai()`, `remove_colons()` |
+| **Create a new Thai document** | Use `scripts/thai_docx.py` via Python (`/usr/bin/python3` or active venv) |
+| **Fix broken spacing / justification** | Set `<w:jc w:val="thaiDistribute"/>` and Complex Script tagging |
+| **Edit an existing document** | `unzip` → `python scripts/merge_runs.py unpacked/` → edit `word/document.xml` → `zip` |
+| **Read / Inspect text** | `pandoc -t markdown file.docx` or `python-docx` |
+| **Tracked changes & comments** | Use `scripts/comment.py` and `scripts/accept_changes.py` |
 
 ---
 
 ## 1. Quick Start (Python with `thai_docx.py`)
 
-A helper module is located at `scripts/thai_docx.py`. It handles all OpenXML Complex Script and Thai Distributed alignment details:
+A battle-tested helper module is located at `scripts/thai_docx.py` (relative to this skill). It abstracts all OpenXML Complex Script and Thai Distributed complexities.
 
 ```python
 import sys, os
-sys.path.append(os.path.expanduser("~/.claude/skills/thai-docx/scripts"))
+# Add skill scripts directory to sys.path
+SKILL_SCRIPTS = os.path.expanduser("~/.gemini/config/skills/thai-docx/scripts")
+if SKILL_SCRIPTS not in sys.path:
+    sys.path.append(SKILL_SCRIPTS)
+
 import thai_docx
+from docx.shared import Inches, Pt, RGBColor
 
 # 1. Initialize Document with standard 1-inch margins and TH Sarabun New
 doc = thai_docx.create_thai_document(
@@ -55,12 +60,13 @@ thai_docx.add_numbered_item(
 )
 
 # 5. Add and Style Table
-table = doc.add_table(rows=3, cols=2)
-table.cell(0, 0).text = "หัวข้อ"
-table.cell(0, 1).text = "รายละเอียด"
-table.cell(1, 0).text = "ข้อมูล 1"
-table.cell(1, 1).text = "รายละเอียด 1"
-thai_docx.style_table(table, col_widths=[2.0, 4.5], header_bg="1B365D", alt_bg="F4F6F9")
+table = doc.add_table(rows=3, cols=3)
+thai_docx.style_table(
+    table,
+    col_widths=[1.5, 2.5, 2.5],
+    header_bg="1B365D",
+    alt_bg="F4F6F9"
+)
 
 doc.save("output_thai.docx")
 ```
@@ -75,14 +81,14 @@ Thai script flows continuously without word spaces (*Scriptio continua*). In Mic
 
 1. **The Word-Gap Explosion (`เว้นว่างไว้เยอะเกิน`)**:
    - Occurs when standard Western Justify (`<w:jc w:val="both"/>` / `WD_ALIGN_PARAGRAPH.JUSTIFY`) is applied to Thai text.
-   - Word only expands ASCII spaces between words, resulting in huge white gaps across the line.
+   - Word only expands the ASCII spaces between words, resulting in enormous white gaps across the line.
 2. **The Letter-Stretching Defect (`อ ุ ต ส า ห ก ร ร ม...`)**:
    - Occurs when Thai Distributed (`<w:jc w:val="thaiDistribute"/>`) is applied without proper Complex Script (CS) tags, or when a line wraps prematurely because Word cannot find a dictionary break in a long compound word.
    - Word treats the short line as needing full distribution and forces letter-spacing tracking across all individual Thai characters.
 
 ### The Solution: True Thai Justify (`thaiDistribute`) with Complex Script
 
-To achieve clean Thai justification:
+To achieve perfect Thai newspaper/book justification:
 - Use **`WD_ALIGN_PARAGRAPH.THAI_JUSTIFY` (`<w:jc w:val="thaiDistribute"/>`)** on all body paragraphs and list items.
 - Every text run (`<w:r>`) must declare **Complex Script (CS)** properties:
   ```xml
@@ -124,12 +130,34 @@ When formatting formal Thai documents (หนังสือราชการ /
 | **Body Size** | 16 pt (`w:sz="32"`, `w:szCs="32"`) | Regular weight |
 | **Heading 1** | 18 pt (`w:sz="36"`, `w:szCs="36"`) | Bold, Deep Navy `#1B365D` or Black |
 | **Heading 2** | 16 pt (`w:sz="32"`, `w:szCs="32"`) | Bold, Medium Blue `#006699` or Black |
-| **Line Spacing** | 1.15 to 1.25 | Prevents vowel collision (`่`, `้`, `๊`, `๋`, `์`, `ุ`, `ู`) |
+| **Line Spacing** | `1.1` (Reports) / `1.0` (Memos & Tables) | `TH Sarabun New`'s internal font metrics already handle diacritics natively. Use `1.1` for executive reports/summaries (tight, readable), and `1.0` (Single) for government memos (ระเบียบงานสารบรรณ) and table cells. Avoid 1.15–1.25 as it creates loose, fragmented layouts. |
 | **Paragraph After** | 3 to 4 pt | Clean separation without extra blank lines |
 | **First-Line Indent**| 0.4 to 0.5 inches (~1.0 to 1.25 cm) | Standard paragraph indentation |
 | **Hanging Indent** | Left: `0.45"`, First-line: `-0.25"` | Clean alignment for `1)`, `2)`, `1.1)` lists |
 | **Numerals** | Arabic `0–9` or Thai `๐–๙` | Keep consistent. Government prefers Thai digits or Arabic depending on agency directive |
 | **Punctuation** | **Never use colons (`:`)** in Thai headings | In Thai, do not write `ได้แก่:` or `หัวข้อ:`. Write `ได้แก่` and `หัวข้อ` |
+
+### Eliminating Red Squiggly Underlines (Proofing Errors)
+
+Microsoft Word frequently marks Thai technical terms, proper nouns, and English abbreviations (PUE, Data Center, GDCC) with red squiggly underlines. To eliminate them completely on both macOS and Windows:
+
+1. **Tag Runs with `<w:noProof/>`**:
+   Add `<w:noProof/>` to `<w:rPr>` for all runs and paragraph properties.
+2. **Strip Proof Error Tags**:
+   Remove all `<w:proofErr w:type="spellStart"/>` and `<w:proofErr w:type="spellEnd"/>` tags from `document.xml`.
+3. **Configure `word/settings.xml`**:
+   Insert `<w:hideSpellingErrors/>` and `<w:hideGrammaticalErrors/>` directly before `<w:proofState>` in `word/settings.xml`.
+4. **Automated Helper**:
+   ```python
+   thai_docx.suppress_proofing_in_docx("document.docx")
+   ```
+
+### OpenXML ECMA-376 Schema Ordering
+
+To avoid corrupt document errors when modifying table and cell properties:
+- **`w:tblPr` child order**: `tblStyle` → `tblW` → `jc` → `tblBorders` → `shd` → `tblCellMar` → `tblLook`.
+- **`w:tcPr` child order**: `tcW` → `shd` (must include `w:val="clear"`) → `tcMar` → `vAlign`.
+- **`w:hint` attribute**: Must only be `default` or `eastAsia`. Never set `w:hint="cs"` as it violates ECMA-376 schema. Complex Script is declared via `<w:cs/>` and `w:cs="TH Sarabun New"`.
 
 ### Text Normalization Helpers
 
@@ -147,14 +175,57 @@ thai_docx.remove_colons("วิกฤตคำขอจองไฟฟ้าเ�
 
 ---
 
-## 4. Repairing Existing Thai Documents
+## 4. Editing Existing Thai Documents (XML Surgery)
 
-To batch-fix an existing `.docx` document that suffers from bad word breaks, giant gaps, or stretched characters:
+When updating existing `.docx` documents to fix Thai formatting or edit content:
 
-```python
-import thai_docx
+```bash
+unzip -q document.docx -d unpacked/
+find unpacked -type l -delete   # strip untrusted symlinks
 
-# Automatically updates all body paragraphs and tables to Thai Distributed
-# with full Complex Script properties
-thai_docx.apply_thai_distribute_to_document("broken_report.docx", "fixed_report.docx")
+# 1. Merge fragmented runs so Thai text is contiguous and findable
+python scripts/merge_runs.py unpacked/
+
+# 2. Edit unpacked/word/document.xml in place (e.g., regex replacement or Python script)
+# To fix justification across all body paragraphs:
+# Replace: <w:jc w:val="both"/> -> <w:jc w:val="thaiDistribute"/>
+
+# 3. Repack the document
+(cd unpacked && rm -f ../repacked.docx && zip -XrD ../repacked.docx .)
+
+# 4. Validate output
+python scripts/office/validate.py repacked.docx --original document.docx
+```
+
+### Adding Comments and Tracked Changes
+
+- **Add Comment**:
+  ```bash
+  python scripts/comment.py unpacked/ "ปรับแก้การจัดแนวเป็น thaiDistribute"
+  ```
+  Anchor with the printed `<w:commentRangeStart>` / `<w:commentRangeEnd>` in `document.xml`.
+- **Accept Tracked Changes**:
+  ```bash
+  python scripts/accept_changes.py in.docx out_clean.docx
+  ```
+
+---
+
+## 5. Verification & Visual Quality Inspection
+
+Always verify the output visually to confirm Thai line-breaking and justification:
+
+```bash
+# 1. Verify XML properties with Python
+/usr/bin/python3 -c "
+import docx
+doc = docx.Document('output.docx')
+for i, p in enumerate(doc.paragraphs[:10]):
+    print(f'P{i}: jc={p.alignment}, text={p.text[:50]}')
+"
+
+# 2. Render to PDF via LibreOffice headless (if available)
+python scripts/office/soffice.py --headless --convert-to pdf output.docx
+pdftoppm -jpeg -r 150 output.pdf page
+# Then read/inspect page-*.jpg using read_file
 ```
