@@ -1,52 +1,45 @@
 #!/usr/bin/env bash
 # =============================================================================
-# install.sh - Install thai-docx skill for Anthropic Claude (Claude Code)
+# install.sh - Install thai-docx skill for Google Antigravity & Anthropic Claude
 # =============================================================================
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLAUDE_SKILLS_DIR="$HOME/.claude/skills"
-AGENTS_SKILLS_DIR="$HOME/.agents/skills"
 
 echo "=========================================================="
-echo "Installing Thai DOCX Skill for Anthropic Claude..."
+echo "Installing Thai DOCX Skill..."
 echo "Source: $SCRIPT_DIR"
 echo "=========================================================="
 
-# 1. Install into ~/.agents/skills if directory exists
-if [ -d "$HOME/.agents" ]; then
-    mkdir -p "$AGENTS_SKILLS_DIR"
-    TARGET_AGENTS="$AGENTS_SKILLS_DIR/thai-docx"
-    rm -rf "$TARGET_AGENTS"
-    cp -R "$SCRIPT_DIR" "$TARGET_AGENTS"
-    echo "✓ Installed to $TARGET_AGENTS"
-fi
+copy_skill() {
+    local target_dir="$1"
+    local desc="$2"
+    mkdir -p "$target_dir"
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete --exclude '.git' --exclude '__pycache__' --exclude '*.pyc' "$SCRIPT_DIR/" "$target_dir/"
+    else
+        rm -rf "$target_dir"
+        mkdir -p "$target_dir"
+        cp -R "$SCRIPT_DIR"/* "$target_dir/" 2>/dev/null || true
+        rm -rf "$target_dir/.git" "$target_dir/__pycache__"
+    fi
+    echo "✓ Installed for $desc: $target_dir"
+}
 
-# 2. Install into ~/.claude/skills
-mkdir -p "$CLAUDE_SKILLS_DIR"
-TARGET_CLAUDE="$CLAUDE_SKILLS_DIR/thai-docx"
-rm -rf "$TARGET_CLAUDE"
+# 1. Google Antigravity IDE & Global Config (~/.gemini/config/skills)
+copy_skill "$HOME/.gemini/config/skills/thai-docx" "Google Antigravity (IDE)"
 
-# Prefer symlink if installed in ~/.agents/skills, else copy
-if [ -d "$AGENTS_SKILLS_DIR/thai-docx" ]; then
-    ln -s "$AGENTS_SKILLS_DIR/thai-docx" "$TARGET_CLAUDE"
-    echo "✓ Linked to $TARGET_CLAUDE -> $AGENTS_SKILLS_DIR/thai-docx"
-else
-    cp -R "$SCRIPT_DIR" "$TARGET_CLAUDE"
-    echo "✓ Copied to $TARGET_CLAUDE"
-fi
+# 2. Antigravity CLI (agy slash commands) (~/.gemini/antigravity-cli/skills)
+copy_skill "$HOME/.gemini/antigravity-cli/skills/thai-docx" "Google Antigravity CLI (agy)"
 
-# 3. Install into ~/.gemini/config/skills if directory exists
-GEMINI_SKILLS_DIR="$HOME/.gemini/config/skills"
-if [ -d "$GEMINI_SKILLS_DIR" ]; then
-    TARGET_GEMINI="$GEMINI_SKILLS_DIR/thai-docx"
-    rm -rf "$TARGET_GEMINI"
-    cp -R "$SCRIPT_DIR" "$TARGET_GEMINI"
-    echo "✓ Installed to $TARGET_GEMINI"
-fi
+# 3. Antigravity 2.0 Global (~/.agents/skills)
+copy_skill "$HOME/.agents/skills/thai-docx" "Antigravity 2.0 Global (~/.agents)"
 
-# 4. Check python-docx and pythainlp dependency
+# 4. Anthropic Claude Code (~/.claude/skills)
+copy_skill "$HOME/.claude/skills/thai-docx" "Anthropic Claude Code"
+
+# 5. Check Python environment & dependencies
 echo ""
 echo "Checking Python environment..."
 if /usr/bin/python3 -c "import docx" >/dev/null 2>&1; then
@@ -66,5 +59,6 @@ fi
 echo ""
 echo "=========================================================="
 echo "🎉 Installation completed successfully!"
-echo "Claude Code will now automatically discover 'thai-docx'!"
+echo "Google Antigravity and Claude Code will now discover 'thai-docx'!"
+echo "You can use /thai-docx in prompts and slash commands."
 echo "=========================================================="

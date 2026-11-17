@@ -25,10 +25,15 @@ A battle-tested helper module is located at `scripts/thai_docx.py` (relative to 
 
 ```python
 import sys, os
-# Add skill scripts directory to sys.path
-SKILL_SCRIPTS = os.path.expanduser("~/.gemini/config/skills/thai-docx/scripts")
-if SKILL_SCRIPTS not in sys.path:
-    sys.path.append(SKILL_SCRIPTS)
+# Add skill scripts directory to sys.path (supports Antigravity and Claude)
+for p in [
+    os.path.expanduser("~/.gemini/config/skills/thai-docx/scripts"),
+    os.path.expanduser("~/.gemini/antigravity-cli/skills/thai-docx/scripts"),
+    os.path.expanduser("~/.agents/skills/thai-docx/scripts"),
+    os.path.expanduser("~/.claude/skills/thai-docx/scripts"),
+]:
+    if os.path.exists(p) and p not in sys.path:
+        sys.path.append(p)
 
 import thai_docx
 from docx.shared import Inches, Pt, RGBColor

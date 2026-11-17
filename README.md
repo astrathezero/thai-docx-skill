@@ -1,8 +1,8 @@
-# Thai DOCX Skill for Anthropic Claude
+# Thai DOCX Skill for Google Antigravity & Anthropic Claude
 
-A specialized, production-ready skill for **Anthropic Claude** (Claude Code, Claude Desktop, and Agent SDK) to create, format, edit, and repair professional Thai Word documents (`.docx`).
+A specialized, production-ready skill for **Google Antigravity** (Antigravity IDE, agy CLI, Antigravity 2.0) and **Anthropic Claude** (Claude Code, Claude Desktop, and Agent SDK) to create, format, edit, and repair professional Thai Word documents (`.docx`).
 
-This skill bridges the gap between **Anthropic's official DOCX engineering** and **Thai OpenXML Typography standards** (solving the infamous letter-stretching and word-gap bugs on macOS and Windows).
+This skill bridges the gap between official DOCX engineering and **Thai OpenXML Typography standards** (solving the infamous letter-stretching and word-gap bugs on macOS and Windows).
 
 ---
 
@@ -29,41 +29,50 @@ This skill bridges the gap between **Anthropic's official DOCX engineering** and
 
 ---
 
-## 📦 Installation for Anthropic Claude
+## 📦 Installation
 
-### Option A: Install Globally in Claude Code (Recommended)
+### Option A: Automatic Multi-Agent Installation (Recommended)
 
-Run the included install script:
+Run the included install script to automatically detect and install for **both Google Antigravity and Anthropic Claude**:
 ```bash
 ./install.sh
 ```
 
-Or manually copy / symlink to your Claude skills directory:
+This installs/links to:
+- **Google Antigravity IDE**: `~/.gemini/config/skills/thai-docx`
+- **Antigravity CLI (`agy`)**: `~/.gemini/antigravity-cli/skills/thai-docx`
+- **Antigravity 2.0 Global**: `~/.agents/skills/thai-docx`
+- **Anthropic Claude Code**: `~/.claude/skills/thai-docx`
+
+### Option B: Manual Installation
+
 ```bash
-# Global installation for Claude Code
+# 1. For Google Antigravity (IDE & Config)
+mkdir -p ~/.gemini/config/skills
+cp -R thai-docx ~/.gemini/config/skills/
+
+# 2. For Antigravity CLI (agy slash commands)
+mkdir -p ~/.gemini/antigravity-cli/skills
+cp -R thai-docx ~/.gemini/antigravity-cli/skills/
+
+# 3. For Antigravity 2.0 Global / Project
+mkdir -p ~/.agents/skills
+cp -R thai-docx ~/.agents/skills/
+
+# 4. For Anthropic Claude Code
 mkdir -p ~/.claude/skills
 cp -R thai-docx ~/.claude/skills/
-
-# Or symlink
-ln -s "$(pwd)/thai-docx" ~/.claude/skills/thai-docx
-```
-
-### Option B: Install in a Specific Project Repository
-
-For repository-scoped skills in Claude Code:
-```bash
-mkdir -p .claude/skills
-cp -R thai-docx .claude/skills/
 ```
 
 ---
 
-## 🚀 How to Use with Claude Code
+## 🚀 How to Use with Antigravity & Claude
 
-Once installed, Claude automatically detects the skill based on your prompts. You can trigger it naturally:
+Once installed, **Antigravity** and **Claude** automatically discover the `/thai-docx` skill. You can trigger it via slash command or natural Thai prompts:
 
+- `'/path/to/file.docx' ใช้ /thai-docx ปรับเอกสารและจัด format หน่อย`
 - *"สร้างเอกสารสรุปรายงานเป็น Word ภาษาไทย จัดหน้าตามระเบียบงานสารบรรณ ใช้ font TH Sarabun New"*
-- *"แก้ปัญหาเอกสาร Word ภาษาไทยที่ตัวอักษรยืดห่าง หรือช่องว่างระหว่างคำกว้างเกินไป"*
+- *"แก้ปัญหาเอกสาร Word ภาษาไทยที่ตัวอักษรยืดห่าง หรือช่องว่างระหว่างคำกว้างเกินไปด้วย ZWSP"*
 - *"จัดหน้าตารางและ bullet ใน docx นี้ให้เป็นเลขอารบิกและจัดแบบ thaiDistribute"*
 - *"Use the thai-docx skill to generate an executive summary Word document"*
 
@@ -75,8 +84,15 @@ You can also use the bundled Python module directly in scripts:
 
 ```python
 import sys, os
-# Add skill scripts to sys.path
-sys.path.append(os.path.expanduser("~/.claude/skills/thai-docx/scripts"))
+# Add skill scripts to sys.path (supports Antigravity and Claude)
+for p in [
+    os.path.expanduser("~/.gemini/config/skills/thai-docx/scripts"),
+    os.path.expanduser("~/.gemini/antigravity-cli/skills/thai-docx/scripts"),
+    os.path.expanduser("~/.agents/skills/thai-docx/scripts"),
+    os.path.expanduser("~/.claude/skills/thai-docx/scripts"),
+]:
+    if os.path.exists(p) and p not in sys.path:
+        sys.path.append(p)
 import thai_docx
 
 # 1. Create document with standard 1-inch margins and TH Sarabun New
