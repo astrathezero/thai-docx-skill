@@ -57,8 +57,13 @@ def remove_colons(text: str) -> str:
     return text.replace(":", "")
 
 
-def clean_thai_text(text: str, to_arabic: bool = True, remove_colon: bool = True) -> str:
-    """Normalize Thai text according to document preferences."""
+def clean_thai_text(
+    text: str,
+    to_arabic: bool = True,
+    remove_colon: bool = True,
+    use_zwsp: bool = False
+) -> str:
+    """Normalize Thai text according to document preferences and optionally inject ZWSP."""
     if not text:
         return ""
     res = text
@@ -66,7 +71,52 @@ def clean_thai_text(text: str, to_arabic: bool = True, remove_colon: bool = True
         res = thai_to_arabic(res)
     if remove_colon:
         res = remove_colons(res)
+    if use_zwsp:
+        res = add_zwsp(res)
     return res
+
+# =============================================================================
+# 1.1 THAI WORD SEGMENTATION & ZERO-WIDTH SPACE (ZWSP) INJECTION
+# =============================================================================
+
+ZWSP = "\u200b"  # Unicode Zero-Width Space (Discretionary word-break opportunity)
+
+
+def add_zwsp(text: str) -> str:
+    """
+    Injects Unicode Zero-Width Space (\u200b) at Thai word boundaries.
+    
+    Solves the infamous Word letter-stretching defect in thaiDistribute by
+    allowing Word to break long compound words cleanly at natural syllable
+    boundaries without forcing awkward character spacing (tracking).
+    
+    Requires pythainlp (pip install pythainlp). Falls back gracefully to original
+    text if pythainlp is not installed.
+    """
+    if not text or len(text.strip()) == 0:
+        return text
+
+    try:
+        import pythainlp
+        words = pythainlp.word_tokenize(text, engine="newmm", keep_whitespace=True)
+        res = []
+        for i, w in enumerate(words):
+            res.append(w)
+            if i < len(words) - 1:
+                next_w = words[i + 1]
+                # Only insert ZWSP between non-whitespace tokens
+                if not w.isspace() and not next_w.isspace():
+                    # Avoid inserting between ASCII words (like English words)
+                    if w.isascii() and next_w.isascii():
+                        continue
+                    # Avoid inserting adjacent to brackets, quotes, punctuation
+                    if w not in '([{\"\'‘“' and next_w not in ')]}\"\'’”,.:;!?-/–—':
+                        res.append(ZWSP)
+        return "".join(res)
+    except ImportError:
+        # pythainlp not installed; return text unchanged
+        return text
+
 
 
 # =============================================================================
@@ -149,6 +199,7 @@ def set_paragraph_thai(
     first_line_indent_in: float = 0,
     left_indent_in: float = 0,
     keep_with_next: bool = False,
+    font_name: str = DEFAULT_FONT,
     lang_code: str = DEFAULT_LANG
 ):
     """
@@ -438,7 +489,7 @@ def set_cell_margins(cell, top: int = 110, bottom: int = 110, left: int = 130, r
     """Set cell internal padding in twips/dxa."""
     tcPr = cell._tc.get_or_add_tcPr()
     tcMar = OxmlElement("w:tcMar")
-    for m, val in [("w:top", top), ("w:bottom", bottom), ("w:left", left), ("w:right", right)]:
+    for m, val in [("w:top", top), ("w:left", left), ("w:bottom", bottom), ("w:right", right)]:
         node = OxmlElement(m)
         node.set(qn("w:w"), str(val))
         node.set(qn("w:type"), "dxa")
@@ -468,11 +519,11 @@ def style_table(
     borders = parse_xml(
         f'<w:tblBorders {nsdecls("w")}>'
         f'<w:top w:val="single" w:sz="6" w:space="0" w:color="{border_color}"/>'
+        f'<w:left w:val="none"/>'
         f'<w:bottom w:val="single" w:sz="6" w:space="0" w:color="{border_color}"/>'
+        f'<w:right w:val="none"/>'
         f'<w:insideH w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>'
         f'<w:insideV w:val="none"/>'
-        f'<w:left w:val="none"/>'
-        f'<w:right w:val="none"/>'
         f'</w:tblBorders>'
     )
     tblPr.append(borders)
@@ -551,6 +602,7 @@ def suppress_proofing_in_docx(input_path: str, output_path: str = None) -> str:
                 if item.filename == "word/document.xml":
                     text = data.decode("utf-8")
                     text = re.sub(r'<w:proofErr[^>]*/>', '', text)
+                    text = text.replace('w:hint="cs"', '')
                     data = text.encode("utf-8")
                 elif item.filename == "word/settings.xml":
                     text = data.decode("utf-8")
@@ -627,3 +679,31 @@ def inspect_document_alignments(docx_path: str) -> dict:
         counts[al] = counts.get(al, 0) + 1
     return counts
 
+
+def inject_zwsp_to_document(input_path: str, output_path: str = None) -> str:
+    """
+    Injects Zero-Width Space (\u200b) into all paragraphs and table cells across an existing .docx file.
+    Eliminates Thai letter-stretching in Microsoft Word and improves line wrapping.
+    """
+    if output_path is None:
+        base, ext = os.path.splitext(input_path)
+        output_path = f"{base}_zwsp{ext}"
+
+    doc = docx.Document(input_path)
+
+    for p in doc.paragraphs:
+        for r in p.runs:
+            if r.text:
+                r.text = add_zwsp(r.text)
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for r in p.runs:
+                        if r.text:
+                            r.text = add_zwsp(r.text)
+
+    doc.save(output_path)
+    suppress_proofing_in_docx(output_path)
+    return output_path

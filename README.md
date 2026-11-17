@@ -8,9 +8,10 @@ This skill bridges the gap between **Anthropic's official DOCX engineering** and
 
 ## 🌟 Key Features
 
-1. **True Thai Justify (`thaiDistribute`)**:
+1. **True Thai Justify (`thaiDistribute`) & Zero-Width Space (ZWSP) Word Segmentation**:
    - Eliminates the **Word-Gap Explosion** (`เว้นว่างไว้เยอะเกิน`) caused by standard Western Justify (`both`).
-   - Eliminates the **Letter-Stretching Defect** (`อ ุ ต ส า ห ก ร ร ม...`) by correctly injecting OpenXML Complex Script (CS) and Language definitions.
+   - Eliminates the **Letter-Stretching Defect** (`อ ุ ต ส า ห ก ร ร ม...`) by injecting Unicode Zero-Width Space (`\u200b` / ZWSP) at Thai word boundaries via `pythainlp`, allowing Word to break compound words cleanly without forcing character tracking.
+   - Declares complete OpenXML Complex Script (CS) and Language definitions on all text runs.
 2. **Thai Government & Standard Typography (มาตรฐานงานสารบรรณ)**:
    - Fonts: `TH Sarabun New` (16pt body, 16–18pt bold headings).
    - Line spacing: `1.1` for executive reports/summaries; `1.0` (Single) for government memos (ระเบียบงานสารบรรณ) and tables (eliminates loose character gaps while TH Sarabun New natively handles diacritics).
@@ -127,6 +128,7 @@ doc.save("รายงานสรุป.docx")
 ## 📋 Requirements
 
 - Python 3.9+ with `python-docx` (`pip install python-docx lxml`)
+- (Recommended) `pythainlp` for Thai word segmentation and Zero-Width Space (ZWSP) injection (`pip install pythainlp`)
 - (Optional) LibreOffice (`soffice`) and `pdftoppm` for headless PDF export and visual verification.
 
 ---

@@ -83,40 +83,59 @@ Thai script flows continuously without word spaces (*Scriptio continua*). In Mic
    - Occurs when standard Western Justify (`<w:jc w:val="both"/>` / `WD_ALIGN_PARAGRAPH.JUSTIFY`) is applied to Thai text.
    - Word only expands the ASCII spaces between words, resulting in enormous white gaps across the line.
 2. **The Letter-Stretching Defect (`อ ุ ต ส า ห ก ร ร ม...`)**:
-   - Occurs when Thai Distributed (`<w:jc w:val="thaiDistribute"/>`) is applied without proper Complex Script (CS) tags, or when a line wraps prematurely because Word cannot find a dictionary break in a long compound word.
-   - Word treats the short line as needing full distribution and forces letter-spacing tracking across all individual Thai characters.
+   - Occurs when Thai Distributed (`<w:jc w:val="thaiDistribute"/>`) is applied to a line where Microsoft Word (especially on macOS) cannot find a dictionary break in a long compound word or technical term.
+   - Word wraps the entire compound word prematurely to the next line.
+   - Having no recognized spaces or break points to expand on the remaining short line, Word's `thaiDistribute` engine forces letter-spacing tracking across all individual Thai characters and tone marks.
 
-### The Solution: True Thai Justify (`thaiDistribute`) with Complex Script
+### The Solution: True Thai Justify (`thaiDistribute`) with Complex Script & ZWSP Word Segmentation
 
-To achieve perfect Thai newspaper/book justification:
-- Use **`WD_ALIGN_PARAGRAPH.THAI_JUSTIFY` (`<w:jc w:val="thaiDistribute"/>`)** on all body paragraphs and list items.
-- Every text run (`<w:r>`) must declare **Complex Script (CS)** properties:
-  ```xml
-  <w:rPr>
-    <!-- 1. Map all font slots with hint="cs" -->
-    <w:rFonts w:ascii="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New" w:eastAsia="TH Sarabun New" w:hint="cs"/>
-    <!-- 2. Dual font sizes: Western w:sz and Complex Script w:szCs (in half-points; 32 = 16pt) -->
-    <w:sz w:val="32"/>
-    <w:szCs w:val="32"/>
-    <!-- 3. Complex Script flag -->
-    <w:cs/>
-    <!-- 4. Complex Script bold/italic if applicable -->
-    <w:bCs/>
-    <!-- 5. Thai Language tagging -->
-    <w:lang w:val="th-TH" w:eastAsia="th-TH" w:bidi="th-TH"/>
-  </w:rPr>
-  ```
-- Every paragraph (`<w:pPr>`) must declare paragraph-level language and font hint:
-  ```xml
-  <w:pPr>
-    <w:jc w:val="thaiDistribute"/>
-    <w:rPr>
-      <w:rFonts w:hint="cs"/>
-      <w:szCs w:val="32"/>
-      <w:lang w:val="th-TH" w:eastAsia="th-TH" w:bidi="th-TH"/>
-    </w:rPr>
-  </w:pPr>
-  ```
+To achieve perfect Thai newspaper/book justification without letter-stretching:
+
+1. **Inject Unicode Zero-Width Space (`\u200b` / ZWSP)**:
+   - Thai is written without spaces between words (*Scriptio continua*).
+   - Injecting `\u200b` (Zero-Width Space) at Thai word boundaries via `thai_docx.add_zwsp(text)` gives Microsoft Word invisible, discretionary line-break opportunities.
+   - When a line approaches the right margin, Word breaks cleanly at the nearest syllable/word boundary instead of wrapping whole compound words. This completely eliminates letter-stretching!
+   ```python
+   import thai_docx
+
+   # Add ZWSP to a string
+   text_with_zwsp = thai_docx.add_zwsp("การบริหารจัดการข้อมูลและการเปลี่ยนผ่านสู่รัฐบาลดิจิทัล")
+
+   # Or inject ZWSP across an entire existing document (.docx)
+   thai_docx.inject_zwsp_to_document("input.docx", "output_zwsp.docx")
+   ```
+
+2. **Set `thaiDistribute` on Paragraphs**:
+   - Use **`WD_ALIGN_PARAGRAPH.THAI_JUSTIFY` (`<w:jc w:val="thaiDistribute"/>`)** on all body paragraphs and list items.
+
+3. **Declare Complex Script (CS) Properties on Every Run**:
+   - Every text run (`<w:r>`) must declare **Complex Script (CS)** properties:
+   ```xml
+   <w:rPr>
+     <!-- 1. Map all font slots (TH Sarabun New) -->
+     <w:rFonts w:ascii="TH Sarabun New" w:hAnsi="TH Sarabun New" w:cs="TH Sarabun New" w:eastAsia="TH Sarabun New"/>
+     <!-- 2. Dual font sizes: Western w:sz and Complex Script w:szCs (in half-points; 32 = 16pt) -->
+     <w:sz w:val="32"/>
+     <w:szCs w:val="32"/>
+     <!-- 3. Complex Script flag -->
+     <w:cs/>
+     <!-- 4. Complex Script bold/italic if applicable -->
+     <w:bCs/>
+     <!-- 5. Thai Language tagging -->
+     <w:lang w:val="th-TH" w:eastAsia="th-TH" w:bidi="th-TH"/>
+   </w:rPr>
+   ```
+4. **Paragraph Properties (`<w:pPr>`)**:
+   ```xml
+   <w:pPr>
+     <w:jc w:val="thaiDistribute"/>
+     <w:rPr>
+       <w:rFonts w:cs="TH Sarabun New"/>
+       <w:szCs w:val="32"/>
+       <w:lang w:val="th-TH" w:eastAsia="th-TH" w:bidi="th-TH"/>
+     </w:rPr>
+   </w:pPr>
+   ```
 
 ---
 

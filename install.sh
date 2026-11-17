@@ -37,7 +37,16 @@ else
     echo "✓ Copied to $TARGET_CLAUDE"
 fi
 
-# 3. Check python-docx dependency
+# 3. Install into ~/.gemini/config/skills if directory exists
+GEMINI_SKILLS_DIR="$HOME/.gemini/config/skills"
+if [ -d "$GEMINI_SKILLS_DIR" ]; then
+    TARGET_GEMINI="$GEMINI_SKILLS_DIR/thai-docx"
+    rm -rf "$TARGET_GEMINI"
+    cp -R "$SCRIPT_DIR" "$TARGET_GEMINI"
+    echo "✓ Installed to $TARGET_GEMINI"
+fi
+
+# 4. Check python-docx and pythainlp dependency
 echo ""
 echo "Checking Python environment..."
 if /usr/bin/python3 -c "import docx" >/dev/null 2>&1; then
@@ -46,6 +55,12 @@ elif python3 -c "import docx" >/dev/null 2>&1; then
     echo "✓ python-docx is available in active python3"
 else
     echo "ℹ Note: Please ensure python-docx is installed: pip install python-docx"
+fi
+
+if python3 -c "import pythainlp" >/dev/null 2>&1; then
+    echo "✓ pythainlp is available for Thai word segmentation (ZWSP)"
+else
+    echo "ℹ Note: For best Thai word segmentation (ZWSP), install pythainlp: pip install pythainlp"
 fi
 
 echo ""
